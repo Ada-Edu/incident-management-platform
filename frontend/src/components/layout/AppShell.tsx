@@ -8,6 +8,7 @@ import {
   Settings,
   LogOut,
   ShieldAlert,
+  ScanText,
 } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useAuth } from '@/auth/AuthProvider';
@@ -27,6 +28,7 @@ const NAV: NavItem[] = [
   { to: '/', label: 'Dashboard', icon: <LayoutDashboard className="size-4" />, permission: 'dashboard.view' },
   { to: '/incidents', label: 'Incidents', icon: <Ticket className="size-4" /> },
   { to: '/incidents/new', label: 'Log Incident', icon: <PlusCircle className="size-4" />, permission: 'incident.create' },
+  { to: '/extraction', label: 'Document Extraction', icon: <ScanText className="size-4" /> },
   { to: '/console', label: 'Manager Console', icon: <Users2 className="size-4" />, permission: 'manager.console' },
   { to: '/reports', label: 'Reports', icon: <BarChart3 className="size-4" />, permission: 'reports.view' },
   { to: '/admin', label: 'Administration', icon: <Settings className="size-4" />, permission: 'admin.settings' },

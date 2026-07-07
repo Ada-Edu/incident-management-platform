@@ -8,6 +8,7 @@ import { DashboardPage } from '@/pages/DashboardPage';
 import { IncidentsPage } from '@/pages/IncidentsPage';
 import { CreateIncidentPage } from '@/pages/CreateIncidentPage';
 import { IncidentDetailPage } from '@/pages/IncidentDetailPage';
+import { DocumentExtractionPage } from '@/pages/DocumentExtractionPage';
 import { ManagerConsolePage } from '@/pages/ManagerConsolePage';
 import { ReportsPage } from '@/pages/ReportsPage';
 import { AdminPage } from '@/pages/AdminPage';
@@ -41,6 +42,7 @@ export default function App() {
           <Route path="/incidents" element={<Shell><IncidentsPage /></Shell>} />
           <Route path="/incidents/new" element={<Shell permission="incident.create"><CreateIncidentPage /></Shell>} />
           <Route path="/incidents/:id" element={<Shell><IncidentDetailPage /></Shell>} />
+          <Route path="/extraction" element={<Shell><DocumentExtractionPage /></Shell>} />
           <Route path="/console" element={<Shell permission="manager.console"><ManagerConsolePage /></Shell>} />
           <Route path="/reports" element={<Shell permission="reports.view"><ReportsPage /></Shell>} />
           <Route path="/admin" element={<Shell permission="admin.settings"><AdminPage /></Shell>} />
