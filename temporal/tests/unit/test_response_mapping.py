@@ -42,6 +42,42 @@ def test_party_without_role_is_null_not_invented(monkeypatch):
     assert de.extract_fields("Jane Doe signed.")["result"]["parties"] == [{"name": "Jane Doe", "role": None}]
 
 
+def test_unicode_party_names_preserved_exactly(monkeypatch):
+    """Non-ASCII names must survive verbatim (no transliteration/normalisation)."""
+    _model(monkeypatch,
+           '{"parties":[{"name":"José Peña","role":"vendedor"},'
+           '{"name":"株式会社ヤマダ","role":null}],"key_dates":[],"key_terms":[]}')
+    parties = de.extract_fields("...")["result"]["parties"]
+    assert parties == [
+        {"name": "José Peña", "role": "vendedor"},
+        {"name": "株式会社ヤマダ", "role": None},
+    ]
+
+
+def test_duplicate_party_names_both_kept(monkeypatch):
+    """Every named occurrence is listed; the mapper must not silently dedupe
+    (two entries for the same name with different roles are both real)."""
+    _model(monkeypatch,
+           '{"parties":[{"name":"Acme","role":"buyer"},{"name":"Acme","role":"seller"}],'
+           '"key_dates":[],"key_terms":[]}')
+    parties = de.extract_fields("...")["result"]["parties"]
+    assert parties == [
+        {"name": "Acme", "role": "buyer"},
+        {"name": "Acme", "role": "seller"},
+    ]
+
+
+def test_extra_unexpected_keys_ignored(monkeypatch):
+    """Unknown top-level keys the model volunteers are dropped; only the three
+    fixed groups are surfaced."""
+    _model(monkeypatch,
+           '{"parties":[{"name":"Acme","role":null}],"key_dates":[],"key_terms":[],'
+           '"summary":"a contract","confidence":0.9}')
+    out = de.extract_fields("...")["result"]
+    assert set(out.keys()) == {"parties", "key_dates", "key_terms"}
+    assert out["parties"] == [{"name": "Acme", "role": None}]
+
+
 def test_key_terms_values_mapped(monkeypatch):
     _model(monkeypatch,
            '{"parties":[],"key_dates":[{"label":"Effective date","date":"1 March 2026"}],'
@@ -68,9 +104,48 @@ def test_non_json_raises_non_retryable_model_error(monkeypatch):
     assert ei.value.type == "model_error" and ei.value.non_retryable
 
 
+def test_malformed_json_after_salvage_is_model_error(monkeypatch):
+    """Braces present but the object is unparseable even after the salvage regex
+    grabs {...} -> non-retryable model_error (not a crash, not invented fields)."""
+    _model(monkeypatch, 'result: {"parties": [ , ], "key_dates": []} !!')
+    with pytest.raises(ApplicationError) as ei:
+        de.extract_fields("...")
+    assert ei.value.type == "model_error" and ei.value.non_retryable
+
+
+def test_json_array_not_object_is_model_error(monkeypatch):
+    """Spec/prompt contract: the model must return a JSON OBJECT. A top-level JSON
+    ARRAY is a contract violation and must surface as a non-retryable model_error
+    (never a partial/invented result, never a retryable crash)."""
+    _model(monkeypatch, '[{"name":"Acme","role":"buyer"}]')
+    with pytest.raises(ApplicationError) as ei:
+        de.extract_fields("...")
+    assert ei.value.type == "model_error" and ei.value.non_retryable
+
+
 def test_non_list_group_coerced_to_empty(monkeypatch):
-    """A group returned as a non-list is defensively coerced to [] (never crashes / never invents)."""
-    _model(monkeypatch, '{"parties":"oops","key_dates":[],"key_terms":[]}')
+    """A group returned as a non-list is defensively coerced to [] (never crashes /
+    never invents). Coercion is per-group: valid sibling groups are untouched."""
+    _model(monkeypatch,
+           '{"parties":"oops","key_dates":[{"label":"Effective date","date":"1 March 2026"}],'
+           '"key_terms":[]}')
+    r = de.extract_fields("...")["result"]
+    assert r["parties"] == []
+    assert r["key_dates"] == [{"label": "Effective date", "date": "1 March 2026"}]
+    assert r["key_terms"] == []
+
+
+def test_missing_group_key_defaults_to_empty(monkeypatch):
+    """Spec: all three headings are ALWAYS present (empty -> 'None found', never
+    omitted). If the model omits a group entirely, the mapper still returns it as []."""
+    _model(monkeypatch, '{"parties":[{"name":"Acme","role":null}]}')
+    r = de.extract_fields("...")["result"]
+    assert r == {"parties": [{"name": "Acme", "role": None}], "key_dates": [], "key_terms": []}
+
+
+def test_null_group_coerced_to_empty(monkeypatch):
+    """A group returned explicitly as null is coerced to [] (not left as None)."""
+    _model(monkeypatch, '{"parties":null,"key_dates":[],"key_terms":[]}')
     assert de.extract_fields("...")["result"]["parties"] == []
 
 

@@ -154,6 +154,12 @@ def extract_fields(text: str) -> dict[str, Any]:
         except json.JSONDecodeError as exc:
             raise ApplicationError("model returned malformed JSON", type="model_error", non_retryable=True) from exc
 
+    # The prompt contract requires a JSON OBJECT. A top-level array (or any
+    # non-object) is a contract violation -> non-retryable model_error, never a
+    # partial/invented result and never a retryable crash.
+    if not isinstance(parsed, dict):
+        raise ApplicationError("model did not return a JSON object", type="model_error", non_retryable=True)
+
     result = _empty_result()
     for group in result:
         items = parsed.get(group, [])

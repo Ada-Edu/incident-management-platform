@@ -9,7 +9,7 @@ from datetime import timedelta
 
 from temporalio import workflow
 from temporalio.common import RetryPolicy
-from temporalio.exceptions import ActivityError, ApplicationError
+from temporalio.exceptions import ActivityError
 
 with workflow.unsafe.imports_passed_through():
     from ...activities import document_extraction as acts
@@ -58,12 +58,14 @@ class DocumentExtractionWorkflow:
                     maximum_attempts=4,
                 ),
             )
-        except ActivityError as err:
-            cause = err.cause
-            if isinstance(cause, ApplicationError) and cause.type == "model_error":
-                await self._fail(extraction_id, "model_error", page_count)
-                return {"status": "failed", "reason": "model_error"}
-            raise
+        except ActivityError:
+            # Any terminal failure of the model activity — a non-retryable
+            # model_error (malformed output) OR transient errors that exhausted
+            # the retry policy — must still produce a TERMINAL row, never a stuck
+            # 'running'. Reason is model_error either way (the model step failed);
+            # the specific cause remains in the workflow history.
+            await self._fail(extraction_id, "model_error", page_count)
+            return {"status": "failed", "reason": "model_error"}
 
         # 3) Persist success (idempotent upsert on unique id).
         await workflow.execute_activity(
