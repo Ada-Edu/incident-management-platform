@@ -1,0 +1,25 @@
+# Runs the Incident Management frontend as a container (nginx-served static build).
+#
+# The Supabase backend (Postgres + Auth + Studio + Edge Functions) is managed by
+# the Supabase CLI (`supabase start`), which runs its own Docker containers. The
+# browser reaches Supabase directly on the host at localhost:54321, so the VITE_*
+# URLs below use localhost — they are baked into the bundle at build time.
+#
+# Usage:
+#   1) supabase start && supabase db reset
+#   2) export the anon key:  VITE_SUPABASE_ANON_KEY=<from `supabase status`>
+#   3) docker compose up --build
+#   4) open http://localhost:3000
+
+services:
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:-http://localhost:54321}
+        VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY:-dev-anon-key}
+        VITE_FUNCTIONS_URL: ${VITE_FUNCTIONS_URL:-http://localhost:54321/functions/v1}
+    image: incident-management-frontend:latest
+    ports:
+      - "3000:80"
+    restart: unless-stopped

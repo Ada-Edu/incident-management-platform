@@ -1,0 +1,73 @@
+# Temporal stack + extraction worker/gateway for the Document Field Extraction feature.
+# Overlay on top of docker-compose.yml (frontend). Supabase runs separately via the
+# Supabase CLI on the host; the worker reaches it at host.docker.internal:54321.
+#
+#   docker compose -f docker-compose.yml -f docker-compose.temporal.yml up --build -d
+#
+# Requires temporal/.env (gitignored) with AWS_BEARER_TOKEN_BEDROCK, BEDROCK_*,
+# SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, TEMPORAL_ADDRESS, TEMPORAL_TASK_QUEUE.
+
+services:
+  temporal-db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: temporal
+      POSTGRES_PASSWORD: temporal
+      POSTGRES_DB: temporal
+    volumes:
+      - temporal-pgdata:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  temporal:
+    image: temporalio/auto-setup:1.25.2
+    depends_on: [temporal-db]
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_USER: temporal
+      POSTGRES_PWD: temporal
+      POSTGRES_SEEDS: temporal-db
+    ports:
+      - "7233:7233"
+    restart: unless-stopped
+
+  temporal-ui:
+    image: temporalio/ui:2.31.2
+    depends_on: [temporal]
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CORS_ORIGINS: http://localhost:3000
+    ports:
+      - "8233:8080"
+    restart: unless-stopped
+
+  extraction-worker:
+    build:
+      context: ./temporal
+    depends_on: [temporal]
+    env_file: [./temporal/.env]
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_TASK_QUEUE: incident-main
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: ["python", "-m", "src.worker"]
+    restart: unless-stopped
+
+  extraction-gateway:
+    build:
+      context: ./temporal
+    depends_on: [temporal]
+    env_file: [./temporal/.env]
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_TASK_QUEUE: incident-main
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    command: ["uvicorn", "src.gateway:app", "--host", "0.0.0.0", "--port", "8088"]
+    ports:
+      - "8088:8088"
+    restart: unless-stopped
+
+volumes:
+  temporal-pgdata:

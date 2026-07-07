@@ -1,0 +1,54 @@
+project_id = "incident-management-platform"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 17
+
+[db.migrations]
+enabled = true
+
+[db.seed]
+enabled = true
+
+[studio]
+enabled = true
+port = 54323
+
+[auth]
+enabled = true
+# The site URL the auth server redirects to after email confirmation / reset.
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["http://localhost:3000"]
+jwt_expiry = 3600
+enable_signup = true
+
+[auth.email]
+enable_signup = true
+enable_confirmations = false   # local dev: skip email confirmation. Enable in prod.
+
+[functions.ai-assistant]
+verify_jwt = true
+
+[functions.chatbot]
+verify_jwt = true
+
+[functions.zendesk-sync]
+verify_jwt = true
+
+[functions.start-extraction]
+verify_jwt = true
+
+# Local analytics (Logflare + Vector) is disabled: on Docker Desktop for Windows
+# the Vector log-shipper cannot reach the Docker socket and crash-loops. It is not
+# needed for the app; disabling stops the supabase_vector/supabase_analytics
+# containers entirely. Re-enable only if you expose the daemon on tcp://localhost:2375.
+[analytics]
+enabled = false
