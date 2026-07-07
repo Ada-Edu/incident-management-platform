@@ -1,0 +1,31 @@
+[project]
+name = "incident-temporal"
+version = "0.0.1"
+description = "Temporal worker for the Incident Management Platform (Document Field Extraction feature)"
+requires-python = ">=3.11"
+dependencies = [
+  "temporalio==1.5.0",
+  "pydantic==2.7.3",
+  "pydantic-settings==2.4.0",
+  "boto3>=1.40.0",
+  "httpx>=0.27.0",
+  "pypdf>=4.2.0",
+  "python-docx>=1.1.2",
+  "fastapi>=0.110.0",
+  "uvicorn>=0.29.0"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest",
+  "pytest-asyncio",
+  "pytest-json-report"
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
