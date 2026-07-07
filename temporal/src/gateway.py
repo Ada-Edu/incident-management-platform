@@ -11,7 +11,8 @@ trigger idempotent: starting the same extraction twice is rejected, not duplicat
 import logging
 
 from fastapi import FastAPI, HTTPException
-from temporalio.client import Client, WorkflowExecutionAlreadyStartedError
+from temporalio.client import Client
+from temporalio.exceptions import WorkflowAlreadyStartedError
 
 from .config import settings
 from .workflows.document_extraction import DocumentExtractionWorkflow
@@ -46,7 +47,7 @@ async def start_extraction(extraction_id: str) -> dict:
             id=workflow_id,
             task_queue=settings.temporal_task_queue,
         )
-    except WorkflowExecutionAlreadyStartedError:
+    except WorkflowAlreadyStartedError:
         # Idempotent: the extraction is already running/complete.
         logger.info("extraction already started extraction_id=%s", extraction_id)
         return {"workflow_id": workflow_id, "run_id": None, "already_started": True}
