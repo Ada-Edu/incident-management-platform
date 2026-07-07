@@ -29,3 +29,7 @@ build-backend = "setuptools.build_meta"
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+  "integration: workflow + real Supabase (model stubbed with fixtures)",
+  "e2e: live path against the running stack + real Bedrock (RUN_E2E=1)",
+]

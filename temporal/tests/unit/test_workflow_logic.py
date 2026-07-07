@@ -1,14 +1,13 @@
-"""Workflow-routing tests (Temporal time-skipping env) with stub activities.
+"""UNIT — workflow control flow with ALL activities stubbed (Temporal test env).
 
-Verifies the DocumentExtractionWorkflow routes success and every failure to the
-right persistence step — mapping to the spec's "trust what I see" criteria:
-a failure never leaves the row pending and never shows guessed fields.
+Validates routing/branching only (no real DB/model): success → persist success;
+guard-rail rejection → persist failure WITHOUT the paid model call; model_error →
+persist failure. Retries are covered in the integration layer.
 """
 from __future__ import annotations
 
 import uuid
 
-import pytest
 from temporalio import activity
 from temporalio.exceptions import ApplicationError
 from temporalio.testing import WorkflowEnvironment
@@ -16,12 +15,10 @@ from temporalio.worker import Worker
 
 from src.workflows.document_extraction import DocumentExtractionWorkflow
 
-TASK_QUEUE = "incident-main-test"
+TASK_QUEUE = "incident-main-unit"
 
 
-def _stub_set(calls: dict, *, fetch, extract=None):
-    """Build a set of stub activities (names match the real ones) that record calls."""
-
+def _stubs(calls: dict, *, fetch, extract=None):
     @activity.defn(name="mark_running")
     async def mark_running(extraction_id: str) -> None:
         calls.setdefault("mark_running", []).append(extraction_id)
@@ -53,44 +50,32 @@ async def _run(activities) -> dict:
         async with Worker(env.client, task_queue=TASK_QUEUE,
                           workflows=[DocumentExtractionWorkflow], activities=activities):
             return await env.client.execute_workflow(
-                DocumentExtractionWorkflow.run,
-                "ext-1",
-                id=f"doc-extract-{uuid.uuid4()}",
-                task_queue=TASK_QUEUE,
-            )
+                DocumentExtractionWorkflow.run, "ext-1",
+                id=f"doc-extract-{uuid.uuid4()}", task_queue=TASK_QUEUE)
 
 
-async def test_ac_workflow_success_persists_succeeded():
-    """Story 1/2: happy path persists a succeeded extraction with the model result."""
+async def test_success_persists_result_and_marks_running():
     calls: dict = {}
     result = {"parties": [{"name": "Acme", "role": "buyer"}], "key_dates": [], "key_terms": []}
-    acts = _stub_set(calls,
-                     fetch={"ok": True, "text": "doc text", "page_count": 3},
-                     extract={"result": result, "model_id": "global.anthropic.claude-opus-4-7"})
-    out = await _run(acts)
+    out = await _run(_stubs(calls, fetch={"ok": True, "text": "t", "page_count": 3},
+                            extract={"result": result, "model_id": "m"}))
     assert out["status"] == "succeeded"
     assert calls["persist_extraction"]["result"] == result
+    assert calls["mark_running"] == ["ext-1"]
     assert "persist_failure" not in calls
 
 
-async def test_ac_workflow_rejection_routes_to_failure_without_model_call():
-    """Edge/Story 2: a guard-rail rejection is persisted as failed and never calls the model."""
+async def test_rejection_persists_failure_and_skips_model():
     calls: dict = {}
-    acts = _stub_set(calls, fetch={"ok": False, "reason": "too_large", "page_count": 42})
-    out = await _run(acts)
+    out = await _run(_stubs(calls, fetch={"ok": False, "reason": "too_large", "page_count": 42}))
     assert out["status"] == "failed" and out["reason"] == "too_large"
     assert calls["persist_failure"] == {"reason": "too_large", "page_count": 42}
-    assert "extract_called" not in calls  # paid model call never made on a rejected doc
+    assert "extract_called" not in calls
 
 
-async def test_ac_workflow_model_error_routes_to_failure():
-    """Story 2: an unparseable model result is persisted as a model_error failure, no guessed fields."""
+async def test_model_error_persists_failure():
     calls: dict = {}
-    acts = _stub_set(
-        calls,
-        fetch={"ok": True, "text": "doc text", "page_count": 2},
-        extract=ApplicationError("bad json", type="model_error", non_retryable=True),
-    )
-    out = await _run(acts)
+    out = await _run(_stubs(calls, fetch={"ok": True, "text": "t", "page_count": 2},
+                            extract=ApplicationError("bad json", type="model_error", non_retryable=True)))
     assert out["status"] == "failed" and out["reason"] == "model_error"
     assert calls["persist_failure"]["reason"] == "model_error"
